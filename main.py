@@ -3,12 +3,20 @@ import time
 import random
 
 # Inicializar Pygame
-pygame.init()
+try:
+    pygame.init()
+except Exception as e:
+    print(f"Error al inicializar Pygame: {e}")
+    exit()
 
 # Configuración de la pantalla
 WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Intersección de Tráfico Inteligente")
+try:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Intersección de Tráfico Inteligente")
+except Exception as e:
+    print(f"Error al configurar la pantalla: {e}")
+    exit()
 
 # Definimos colores
 BLACK = (0, 0, 0)
@@ -19,8 +27,12 @@ GRAY = (100, 100, 100)
 WHITE = (255, 255, 255)
 
 # Cargar la imagen del coche
-CAR_IMAGE = pygame.image.load("coche.png").convert_alpha()
-CAR_IMAGE = pygame.transform.scale(CAR_IMAGE, (80, 55))
+try:
+    CAR_IMAGE = pygame.image.load("coche.png").convert_alpha()
+    CAR_IMAGE = pygame.transform.scale(CAR_IMAGE, (80, 55))
+except Exception as e:
+    print(f"Error al cargar la imagen 'coche.png': {e}")
+    exit()
 
 # Reloj para controlar FPS
 clock = pygame.time.Clock()
@@ -45,7 +57,6 @@ class TrafficLight:
         if total_cars == 0:
             self.base_time = self.min_time
         else:
-            # Calcula el tiempo proporcional al tráfico
             proportion = car_count / total_cars
             self.base_time = max(self.min_time, min(self.max_time, int(proportion * 60)))
         
@@ -73,7 +84,6 @@ class Car:
             self.image = pygame.transform.rotate(CAR_IMAGE, 180)
 
     def update(self, traffic_lights, all_cars):
-        # Verificar colisión con otros coches
         for other_car in all_cars:
             if other_car != self and other_car.direction == self.direction:
                 if self.direction == "top-left":
@@ -88,7 +98,6 @@ class Car:
                     self.stopped = True
                     return
 
-        # Verificar semáforo
         for light in traffic_lights:
             if light.direction == self.direction:
                 if self.direction == "top-left":
@@ -106,7 +115,6 @@ class Car:
                 else:
                     self.stopped = False
 
-        # Mover el coche si no está detenido
         if not self.stopped:
             if self.direction == "top-left":
                 self.y += self.speed
@@ -120,44 +128,27 @@ class Car:
     def draw(self, screen):
         screen.blit(self.image, (self.x, self.y))
 
-def ajustar_semaforo(conteo_autos):
-    """
-    Ajusta el tiempo del semáforo en una intersección según el conteo de autos.
-
-    Args:
-        conteo_autos: Un diccionario donde las claves son los nombres de los carriles
-                      y los valores son el número de autos detectados en cada carril.
-                      Ejemplo: {'carril_1': 10, 'carril_2': 5}
-
-    Returns:
-        Un diccionario con los tiempos de semáforo para cada carril.
-        Ejemplo: {'carril_1': 20, 'carril_2': 10}
-    """
-    tiempos_semaforo = {}
-    total_autos = sum(conteo_autos.values())
-
-    if total_autos == 0:
-        # Manejar el caso donde no hay autos, quizás un tiempo mínimo por defecto
-        for carril, conteo in conteo_autos.items():
-            tiempos_semaforo[carril] = 5  # Ejemplo: 5 segundos
-        return tiempos_semaforo
-
-    for carril, conteo in conteo_autos.items():
-        # Calcula un tiempo proporcional al número de autos en cada carril
-        tiempo = int((conteo / total_autos) * 60)  # 60 segundos como tiempo base total
-        tiempos_semaforo[carril] = max(tiempo, 5)  # Se asegura un mínimo de 5 segundos
-
-    return tiempos_semaforo
+def get_next_light(traffic_lights, lane_counters):
+    """Elige el próximo semáforo basado en el conteo de coches"""
+    max_cars = 0
+    next_light = None
+    for i, light in enumerate(traffic_lights):
+        car_count = lane_counters[light.direction]
+        if car_count > max_cars:
+            max_cars = car_count
+            next_light = i
+    return next_light if next_light is not None else 0
 
 def adjust_traffic_lights(traffic_lights, lane_counters):
     """Ajusta los tiempos de los semáforos basado en el conteo de autos"""
-    # Usar la función ajustar_semaforo para calcular los tiempos
-    tiempos_semaforo = ajustar_semaforo(lane_counters)
-
-    # Asignar el tiempo ajustado al semáforo correspondiente según su dirección
+    total_cars = sum(lane_counters.values())
     for light in traffic_lights:
-        light.adjust_time(lane_counters[light.direction], sum(lane_counters.values()))
-        # Aquí usamos el método adjust_time de TrafficLight para que sea consistente
+        car_count = lane_counters[light.direction]
+        if total_cars == 0 or car_count == 0:
+            light.base_time = light.min_time
+        else:
+            proportion = car_count / total_cars
+            light.base_time = max(light.min_time, min(light.max_time, int(proportion * 60)))
 
 # Crear semáforos
 traffic_lights = [
@@ -176,7 +167,7 @@ current_light = 0
 state = "red"
 state_timer = 2
 last_change = time.time()
-adjustment_interval = 2  # Ajustar semáforos cada 10 segundos
+adjustment_interval = 2
 last_adjustment = time.time()
 
 # Bucle principal
@@ -184,7 +175,7 @@ running = True
 while running:
     screen.fill(GRAY)
 
-    # Dibujar carreteras y divisores (sin cambios aquí)
+    # Dibujar carreteras y divisores
     pygame.draw.rect(screen, BLACK, (0, HEIGHT // 2 - 100, WIDTH, 200))
     pygame.draw.rect(screen, BLACK, (WIDTH // 2 - 100, 0, 200, HEIGHT))
     pygame.draw.rect(screen, RED, (0, HEIGHT // 2 - 5, WIDTH // 2 - 100, 10))
@@ -203,15 +194,14 @@ while running:
     if elapsed > state_timer:
         if state == "green":
             state = "yellow"
-            state_timer = 3  # Tiempo fijo para amarillo
+            state_timer = 3
         elif state == "yellow":
             state = "red"
-            state_timer = 2  # Tiempo fijo para rojo
+            state_timer = 2
         elif state == "red":
             state = "green"
-            # Usar el base_time del semáforo actual según su dirección
+            current_light = get_next_light(traffic_lights, lane_counters)
             state_timer = traffic_lights[current_light].base_time
-            current_light = (current_light + 1) % len(traffic_lights)
         last_change = now
 
     # Actualizar y dibujar los semáforos
@@ -237,7 +227,7 @@ while running:
         lane_counters[cars[index].direction] -= 1
         del cars[index]
 
-    # Dibujar contadores
+    # Dibujar contadores (corregido)
     font = pygame.font.Font(None, 36)
     top_left_text = font.render(str(lane_counters["top-left"]), True, WHITE)
     screen.blit(top_left_text, (WIDTH // 2 - 80, 10))
@@ -249,22 +239,26 @@ while running:
     screen.blit(top_right_text, (WIDTH - 35, HEIGHT // 2 - 80))
 
     # Eventos
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_s:
-                cars.append(Car(WIDTH // 2 -80, 0, "top-left"))
-                lane_counters["top-left"] += 1
-            elif event.key == pygame.K_d:
-                cars.append(Car(0, HEIGHT // 2 + 30, "bottom-left"))
-                lane_counters["bottom-left"] += 1
-            elif event.key == pygame.K_w:
-                cars.append(Car(WIDTH // 2 + 30, HEIGHT - 55, "bottom-right"))
-                lane_counters["bottom-right"] += 1
-            elif event.key == pygame.K_a:
-                cars.append(Car(WIDTH - 80, HEIGHT // 2 - 80, "top-right"))
-                lane_counters["top-right"] += 1
+    try:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    cars.append(Car(WIDTH // 2 - 80, 0, "top-left"))
+                    lane_counters["top-left"] += 1
+                elif event.key == pygame.K_d:
+                    cars.append(Car(0, HEIGHT // 2 + 30, "bottom-left"))
+                    lane_counters["bottom-left"] += 1
+                elif event.key == pygame.K_w:
+                    cars.append(Car(WIDTH // 2 + 30, HEIGHT - 55, "bottom-right"))
+                    lane_counters["bottom-right"] += 1
+                elif event.key == pygame.K_a:
+                    cars.append(Car(WIDTH - 80, HEIGHT // 2 - 80, "top-right"))
+                    lane_counters["top-right"] += 1
+    except Exception as e:
+        print(f"Error en el bucle de eventos: {e}")
+        running = False
 
     pygame.display.flip()
     clock.tick(60)
