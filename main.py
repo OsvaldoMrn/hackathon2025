@@ -44,7 +44,7 @@ class TrafficLight:
         self.direction = direction
         self.state = "red"
         self.timer = 0
-        self.base_time = 10  # Tiempo base para verde
+        self.base_time = 5   # Tiempo base inicial
         self.min_time = 5    # Tiempo mínimo para verde
         self.max_time = 30   # Tiempo máximo para verde
 
@@ -52,13 +52,10 @@ class TrafficLight:
         self.state = state
         self.timer = timer
         
-    def adjust_time(self, car_count, total_cars):
-        """Ajusta el tiempo del semáforo basado en el conteo de autos"""
-        if total_cars == 0:
-            self.base_time = self.min_time
-        else:
-            proportion = car_count / total_cars
-            self.base_time = max(self.min_time, min(self.max_time, int(proportion * 60)))
+    def adjust_time(self, car_count):
+        """Ajusta el tiempo del semáforo basado en el conteo de autos en el carril"""
+        self.base_time = max(self.min_time, min(self.max_time, 5 + car_count * 3))
+        print(f"{self.direction}: car_count={car_count}, base_time={self.base_time}")
         
     def draw(self, screen):
         color = RED if self.state == "red" else (YELLOW if self.state == "yellow" else GREEN)
@@ -128,28 +125,6 @@ class Car:
     def draw(self, screen):
         screen.blit(self.image, (self.x, self.y))
 
-def get_next_light(traffic_lights, lane_counters):
-    """Elige el próximo semáforo basado en el conteo de coches"""
-    max_cars = 0
-    next_light = None
-    for i, light in enumerate(traffic_lights):
-        car_count = lane_counters[light.direction]
-        if car_count > max_cars:
-            max_cars = car_count
-            next_light = i
-    return next_light if next_light is not None else 0
-
-def adjust_traffic_lights(traffic_lights, lane_counters):
-    """Ajusta los tiempos de los semáforos basado en el conteo de autos"""
-    total_cars = sum(lane_counters.values())
-    for light in traffic_lights:
-        car_count = lane_counters[light.direction]
-        if total_cars == 0 or car_count == 0:
-            light.base_time = light.min_time
-        else:
-            proportion = car_count / total_cars
-            light.base_time = max(light.min_time, min(light.max_time, int(proportion * 60)))
-
 # Crear semáforos
 traffic_lights = [
     TrafficLight(WIDTH // 2 - 50, HEIGHT // 2 - 120, "top-left"),
@@ -167,8 +142,6 @@ current_light = 0
 state = "red"
 state_timer = 2
 last_change = time.time()
-adjustment_interval = 2
-last_adjustment = time.time()
 
 # Bucle principal
 running = True
@@ -183,13 +156,8 @@ while running:
     pygame.draw.rect(screen, RED, (WIDTH // 2 - 5, 0, 10, HEIGHT // 2 - 100))
     pygame.draw.rect(screen, RED, (WIDTH // 2 - 5, HEIGHT // 2 + 100, 10, HEIGHT // 2 - 100))
 
-    # Ajustar tiempos de semáforos periódicamente
-    now = time.time()
-    if now - last_adjustment > adjustment_interval:
-        adjust_traffic_lights(traffic_lights, lane_counters)
-        last_adjustment = now
-
     # Actualizar semáforos
+    now = time.time()
     elapsed = now - last_change
     if elapsed > state_timer:
         if state == "green":
@@ -200,8 +168,11 @@ while running:
             state_timer = 2
         elif state == "red":
             state = "green"
-            current_light = get_next_light(traffic_lights, lane_counters)
+            current_light = (current_light + 1) % len(traffic_lights)
+            car_count = lane_counters[traffic_lights[current_light].direction]
+            traffic_lights[current_light].adjust_time(car_count)
             state_timer = traffic_lights[current_light].base_time
+            print(f"Cambio a verde en {traffic_lights[current_light].direction}, state_timer={state_timer}")
         last_change = now
 
     # Actualizar y dibujar los semáforos
